@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pushe_example/utils.dart';
 import 'package:pushe_flutter/pushe.dart';
+import 'dart:io' show Platform;
 
 /// The function is a top level which runs in another isolate.
 /// This function must be top level or static, since it has to be independent of any class.
@@ -49,6 +50,10 @@ class _PusheSampleState extends State<PusheSampleWidget> {
   void initState() {
     super.initState();
     _implementListeners();
+
+    if (Platform.isIOS) {
+      Pushe.initialize();
+    }
   }
 
   void _updateStatus(String text) async {
@@ -187,8 +192,9 @@ class _PusheSampleState extends State<PusheSampleWidget> {
       "IDs": () async {
         alert(context, () {},
             title: 'IDs',
-            message:
-                "DeviceId:\n${await Pushe.getDeviceId()}\n\nGoogleAdId:\n${await Pushe.getGoogleAdvertisingId()}");
+            message: Platform.isAndroid
+                ? "DeviceId:\n${await Pushe.getDeviceId()}\n\nGoogleAdId:\n${await Pushe.getGoogleAdvertisingId()}"
+                : "DeviceId:\n${await Pushe.getDeviceId()}\n\nAdvertisingId:\n${await Pushe.getAdvertisingId()}");
       },
       "Custom ID": () async {
         await getInfo(context, (text) {
@@ -242,33 +248,38 @@ Enter topic name to subscribe or unsubscribe:
               });
             });
       },
-      "Notification channel": () async {
-        await getInfo(
-            context,
-            (text) {
-              // Create (only name and Id)
-              var parts = text.split(":");
-              if (parts.length != 2) {
-                _updateStatus("Enter id and name in id:name format");
-                return;
-              }
+      "Notification channel": Platform.isAndroid
+          ? () async {
+              await getInfo(
+                  context,
+                  (text) {
+                    // Create (only name and Id)
+                    var parts = text.split(":");
+                    if (parts.length != 2) {
+                      _updateStatus("Enter id and name in id:name format");
+                      return;
+                    }
 
-              var id = parts[0];
-              var name = parts[1];
-              Pushe.createNotificationChannel(id, name);
-              _updateStatus("Create notification channel $name");
+                    var id = parts[0];
+                    var name = parts[1];
+                    Pushe.createNotificationChannel(id, name);
+                    _updateStatus("Create notification channel $name");
+                  },
+                  title: "Channel",
+                  message:
+                      'Enter channel id and name in id:name format and tap create to create a channel\nOr enter channel id and tap remove to remove a channel',
+                  positive: 'Create',
+                  negative: "Remove",
+                  onNegative: (text) {
+                    var id = text;
+                    Pushe.removeNotificationChannel(id);
+                    _updateStatus('Remove notification channel with id $id');
+                  });
+            }
+          : () async {
+              alert(context, () {},
+                  title: 'Channel', message: 'Not available in iOS');
             },
-            title: "Channel",
-            message:
-                'Enter channel id and name in id:name format and tap create to create a channel\nOr enter channel id and tap remove to remove a channel',
-            positive: 'Create',
-            negative: "Remove",
-            onNegative: (text) {
-              var id = text;
-              Pushe.removeNotificationChannel(id);
-              _updateStatus('Remove notification channel with id $id');
-            });
-      },
       "Tag (name:value)": () async {
         await getInfo(
             context,
@@ -302,165 +313,226 @@ Enter topic name to subscribe or unsubscribe:
           _updateStatus('Sending event: $text');
         }, title: 'Event', message: 'Type event name to send');
       },
-      "Analytics: Ecommerce": () async {
-        await getInfo(context, (text) {
-          var parts = text.split(":");
-          if (parts.length != 2) return;
-          try {
-            Pushe.sendEcommerceData(parts[0], double.parse(parts[1]));
-            _updateStatus(
-                'Sending Ecommerce data with name ${parts[0]} and price ${parts[1]}');
-          } catch (e) {
-            _updateStatus('Enter valid price (price is double)');
-          }
-        },
-            title: 'Ecommerce',
-            message: 'Enter value in name:price format to send data');
-      },
-      "Notification: DeviceId": () async {
-        await getInfo(
-            context,
-            (text) async {
-              Pushe.sendNotificationToUser(IdType.DeviceId,
-                  await Pushe.getDeviceId(), 'Title for me', 'Content for me');
-              _updateStatus('Sending notification to this device');
-            },
-            title: 'Notification',
-            message:
-                'Enter androidId to send a simple notification to the user',
-            positive: 'Send to me',
-            negative: 'Send to ...',
-            onNegative: (text) {
-              Pushe.sendNotificationToUser(
-                  IdType.DeviceId, text, 'Test title', 'Test content');
-              _updateStatus('Sending notification to AndroidId: $text');
-            });
-      },
-      "Notification: GoogleAdId": () async {
-        await getInfo(
-            context,
-            (text) async {
-              Pushe.sendNotificationToUser(
-                  IdType.GoogleAdvertisingId,
-                  await Pushe.getGoogleAdvertisingId(),
-                  'Title for me',
-                  'Content for me');
-              _updateStatus('Sending notification to this device');
-            },
-            title: 'Notification',
-            message:
-                'Enter GoogleAdID to send a simple notification to the user',
-            positive: 'Send to me',
-            negative: 'Send to ...',
-            onNegative: (text) {
-              Pushe.sendNotificationToUser(IdType.GoogleAdvertisingId, text,
-                  'Test title', 'Test content');
-              _updateStatus('Sending notification to GoogleAdID: $text');
-            });
-      },
-      "Notification: CustomId": () async {
-        await getInfo(
-            context,
-            (text) {
-              Pushe.getCustomId().then((value) {
-                if (value == null || value.isEmpty) {
-                  _updateStatus("Can not send by CustomID when there's none");
-                  return;
+      "Analytics: Ecommerce": Platform.isAndroid
+          ? () async {
+              await getInfo(context, (text) {
+                var parts = text.split(":");
+                if (parts.length != 2) return;
+                try {
+                  Pushe.sendEcommerceData(parts[0], double.parse(parts[1]));
+                  _updateStatus(
+                      'Sending Ecommerce data with name ${parts[0]} and price ${parts[1]}');
+                } catch (e) {
+                  _updateStatus('Enter valid price (price is double)');
                 }
-                Pushe.sendNotificationToUser(
-                    IdType.CustomId, value, 'Title for me', 'Content for me');
-                _updateStatus('Sending notification to this device');
-              });
-            },
-            title: 'Notification',
-            message: 'Enter CustomId to send a simple notification to the user',
-            positive: 'Send to me',
-            negative: 'Send to ...',
-            onNegative: (text) {
-              Pushe.sendNotificationToUser(
-                  IdType.CustomId, text, 'Test title', 'Test content');
-              _updateStatus('Sending notification to CustomId: $text');
-            });
-      },
-      "Enable/Disable notification": () async {
-        await alert(
-            context,
-            () {
-              Pushe.setNotificationOn();
-              _updateStatus("Notifications will be shown");
-            },
-            title: 'Notification',
-            message:
-                'Current status: ${await Pushe.isNotificationOn() ? "Enabled" : "Disabled"}\nDo you want to enable or disable notification publishing?',
-            ok: 'Enable',
-            no: 'Disable',
-            onNo: () {
-              Pushe.setNotificationOff();
-              _updateStatus("Notifications won't be shown if received");
-            });
-      },
-      "Enable/Disable custom sound": () async {
-        await alert(
-            context,
-            () {
-              Pushe.enableCustomSound();
-              _updateStatus('Custom sound will be played if received');
-            },
-            title: 'Custom sound',
-            message:
-                'Current status: ${await Pushe.isCustomSoundEnabled() ? "Enabled" : "Disabled"}\nDo you want to enable or disable custom sound for notification?',
-            ok: 'Enable',
-            no: 'Disable',
-            onNo: () {
-              Pushe.disableCustomSound();
-              _updateStatus("Custom sound won't be played if received");
-            });
-      },
-      "InApp: trigger event": () async {
-        getInfo(context, (value) async {
-          if (value.isNotEmpty) {
-            _updateStatus('Triggering local event $value');
-            await Pushe.triggerEvent(value);
-            _updateStatus('Event triggered');
-          }
-        }, title: 'InApp event', message: 'Enter name of event');
-      },
-      "InApp: Toggle in app display": () async {
-        if (await Pushe.isInAppMessagingEnabled()) {
-          _updateStatus('Disabling InAppMessaging');
-          await Pushe.disableInAppMessaging();
-          _updateStatus('InApp display is OFF');
-        } else {
-          _updateStatus('Enabling InAppMessaging');
-          await Pushe.enableInAppMessaging();
-          _updateStatus('InApp display is ON');
-        }
-      },
-      "InApp: dismiss shown InApp message": () async {
-        Pushe.dismissShownInApp();
-      },
-      "InApp: Send test message (Test)": () async {
-        getInfo(
-            context,
-                (value) {
-              // ignore: invalid_use_of_visible_for_testing_member
-              Pushe.testInAppMessage(value, instant: false);
-            },
-            title: 'TEST: InApp',
-            message:
-            'Enter the desired message\nInstant: It will not wait for trigger and just shows it\nNotInstant: Exactly behaves as a real message',
-            positive: 'Not instant',
-            negative: 'Instant',
-            onNegative: (value) async {
-              // ignore: invalid_use_of_visible_for_testing_member
-              Pushe.testInAppMessage(value, instant: true);
+              },
+                  title: 'Ecommerce',
+                  message: 'Enter value in name:price format to send data');
             }
-        );
-      },
-      "ReImplement listeners": () {
-        _updateStatus('Listeners re-implemented');
-        _implementListeners();
-      }
+          : () async {
+              alert(context, () {},
+                  title: 'Analytics: Ecommerce',
+                  message: 'Not available in iOS');
+            },
+      "Notification: DeviceId": Platform.isAndroid
+          ? () async {
+              await getInfo(
+                  context,
+                  (text) async {
+                    Pushe.sendNotificationToUser(
+                        IdType.DeviceId,
+                        await Pushe.getDeviceId(),
+                        'Title for me',
+                        'Content for me');
+                    _updateStatus('Sending notification to this device');
+                  },
+                  title: 'Notification',
+                  message:
+                      'Enter androidId to send a simple notification to the user',
+                  positive: 'Send to me',
+                  negative: 'Send to ...',
+                  onNegative: (text) {
+                    Pushe.sendNotificationToUser(
+                        IdType.DeviceId, text, 'Test title', 'Test content');
+                    _updateStatus('Sending notification to AndroidId: $text');
+                  });
+            }
+          : () async {
+              alert(context, () {},
+                  title: 'Notification', message: 'Not available in iOS');
+            },
+      "Notification: GoogleAdId": Platform.isAndroid
+          ? () async {
+              await getInfo(
+                  context,
+                  (text) async {
+                    Pushe.sendNotificationToUser(
+                        IdType.GoogleAdvertisingId,
+                        await Pushe.getGoogleAdvertisingId(),
+                        'Title for me',
+                        'Content for me');
+                    _updateStatus('Sending notification to this device');
+                  },
+                  title: 'Notification',
+                  message:
+                      'Enter GoogleAdID to send a simple notification to the user',
+                  positive: 'Send to me',
+                  negative: 'Send to ...',
+                  onNegative: (text) {
+                    Pushe.sendNotificationToUser(IdType.GoogleAdvertisingId,
+                        text, 'Test title', 'Test content');
+                    _updateStatus('Sending notification to GoogleAdID: $text');
+                  });
+            }
+          : () async {
+              alert(context, () {},
+                  title: 'Notification', message: 'Not available in iOS');
+            },
+      "Notification: CustomId": Platform.isAndroid
+          ? () async {
+              await getInfo(
+                  context,
+                  (text) {
+                    Pushe.getCustomId().then((value) {
+                      if (value == null || value.isEmpty) {
+                        _updateStatus(
+                            "Can not send by CustomID when there's none");
+                        return;
+                      }
+                      Pushe.sendNotificationToUser(IdType.CustomId, value,
+                          'Title for me', 'Content for me');
+                      _updateStatus('Sending notification to this device');
+                    });
+                  },
+                  title: 'Notification',
+                  message:
+                      'Enter CustomId to send a simple notification to the user',
+                  positive: 'Send to me',
+                  negative: 'Send to ...',
+                  onNegative: (text) {
+                    Pushe.sendNotificationToUser(
+                        IdType.CustomId, text, 'Test title', 'Test content');
+                    _updateStatus('Sending notification to CustomId: $text');
+                  });
+            }
+          : () async {
+              alert(context, () {},
+                  title: 'Notification', message: 'Not available in iOS');
+            },
+      "Enable/Disable notification": Platform.isAndroid
+          ? () async {
+              await alert(
+                  context,
+                  () {
+                    Pushe.setNotificationOn();
+                    _updateStatus("Notifications will be shown");
+                  },
+                  title: 'Notification',
+                  message:
+                      'Current status: ${await Pushe.isNotificationOn() ? "Enabled" : "Disabled"}\nDo you want to enable or disable notification publishing?',
+                  ok: 'Enable',
+                  no: 'Disable',
+                  onNo: () {
+                    Pushe.setNotificationOff();
+                    _updateStatus("Notifications won't be shown if received");
+                  });
+            }
+          : () async {
+              alert(context, () {},
+                  title: 'Notification', message: 'Not available in iOS');
+            },
+      "Enable/Disable custom sound": Platform.isAndroid
+          ? () async {
+              await alert(
+                  context,
+                  () {
+                    Pushe.enableCustomSound();
+                    _updateStatus('Custom sound will be played if received');
+                  },
+                  title: 'Custom sound',
+                  message:
+                      'Current status: ${await Pushe.isCustomSoundEnabled() ? "Enabled" : "Disabled"}\nDo you want to enable or disable custom sound for notification?',
+                  ok: 'Enable',
+                  no: 'Disable',
+                  onNo: () {
+                    Pushe.disableCustomSound();
+                    _updateStatus("Custom sound won't be played if received");
+                  });
+            }
+          : () async {
+              alert(context, () {},
+                  title: 'Custom sound', message: 'Not available in iOS');
+            },
+      "InApp: trigger event": Platform.isAndroid
+          ? () async {
+              getInfo(context, (value) async {
+                if (value.isNotEmpty) {
+                  _updateStatus('Triggering local event $value');
+                  await Pushe.triggerEvent(value);
+                  _updateStatus('Event triggered');
+                }
+              }, title: 'InApp event', message: 'Enter name of event');
+            }
+          : () async {
+              alert(context, () {},
+                  title: 'InApp event', message: 'Not available in iOS');
+            },
+      "InApp: Toggle in app display": Platform.isAndroid
+          ? () async {
+              if (await Pushe.isInAppMessagingEnabled()) {
+                _updateStatus('Disabling InAppMessaging');
+                await Pushe.disableInAppMessaging();
+                _updateStatus('InApp display is OFF');
+              } else {
+                _updateStatus('Enabling InAppMessaging');
+                await Pushe.enableInAppMessaging();
+                _updateStatus('InApp display is ON');
+              }
+            }
+          : () async {
+              alert(context, () {},
+                  title: 'InApp display', message: 'Not available in iOS');
+            },
+      "InApp: dismiss shown InApp message": Platform.isAndroid
+          ? () async {
+              Pushe.dismissShownInApp();
+            }
+          : () async {
+              alert(context, () {},
+                  title: 'InApp dismiss', message: 'Not available in iOS');
+            },
+      "InApp: Send test message (Test)": Platform.isAndroid
+          ? () async {
+              getInfo(
+                  context,
+                  (value) {
+                    // ignore: invalid_use_of_visible_for_testing_member
+                    Pushe.testInAppMessage(value, instant: false);
+                  },
+                  title: 'TEST: InApp',
+                  message:
+                      'Enter the desired message\nInstant: It will not wait for trigger and just shows it\nNotInstant: Exactly behaves as a real message',
+                  positive: 'Not instant',
+                  negative: 'Instant',
+                  onNegative: (value) async {
+                    // ignore: invalid_use_of_visible_for_testing_member
+                    Pushe.testInAppMessage(value, instant: true);
+                  });
+            }
+          : () async {
+              alert(context, () {},
+                  title: 'InApp test', message: 'Not available in iOS');
+            },
+      "ReImplement listeners": Platform.isAndroid
+          ? () {
+              _updateStatus('Listeners re-implemented');
+              _implementListeners();
+            }
+          : () async {
+              alert(context, () {},
+                  title: 'ReImplement listeners',
+                  message: 'Not available in iOS');
+            }
     };
   }
 }
