@@ -18,8 +18,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  pushe_flutter:
-    path: ../
+  pushe_flutter: 2.3.0-alpha01
 
 # For information on the generic Dart part of this file, see the
 # following page: https://www.dartlang.org/tools/pub/pubspec
